@@ -107,6 +107,7 @@
       msg)))
 
 (defn slack-post-message
+  "Posts a message to Slack channel."
   [token channel msg]
   (client/post "https://slack.com/api/chat.postMessage"
                {:form-params {:token token
@@ -130,19 +131,21 @@
 (defn -main
   [& args]
   (do
+    ;; Update the RB session token (used to auhtenticate).
     (rb/update-rb-session-id)
     (let [slack-users (get-slack-users @slack-token)
           reqs (rb/get-review-requests {:ship-it 0, :max-results 100})
           old-enough-reqs (filter old-enough? reqs)
-
+          ;; Find naggable requests.
           naggable (filter #(and (naggable? %) (not (naggable-serious? %))) old-enough-reqs)
           naggable-serious (filter naggable-serious? old-enough-reqs)
-
+          ;; Find users to nag (their e-mails).
           naggees (pmap find-naggees naggable)
           naggees-serious (pmap find-naggees naggable-serious)
-
+          ;; Zip the users-to-be-nagged with the respective review requests so that
+          ;; we have all the info we need when sending the Slack message.
           naggees-zipped (map vector naggees naggable)
           naggees-serious-zipped (map vector naggees-serious naggable-serious)]
-
+      ;; Nag away!
       (doall (map #(slack-notify slack-users % false) naggees-zipped))
       (doall (map #(slack-notify slack-users % true) naggees-serious-zipped)))))
