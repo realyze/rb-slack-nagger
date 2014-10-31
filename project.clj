@@ -6,6 +6,8 @@
   :dependencies [
                  [hiccup "1.0.5"]
                  [clj-http "1.0.1"]
+                 [clj-time "0.8.0"]
+                 [clojurewerkz/urly  "1.0.0"]
                  [org.clojure/data.json "0.2.5"]
                  [org.clojure/tools.logging "0.3.1"]
                  [org.clojure/clojure "1.6.0"]]
