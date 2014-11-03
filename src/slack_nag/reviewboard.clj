@@ -1,5 +1,6 @@
 (ns slack-nag.reviewboard
   (:require [clj-http.client :as client]
+            [clj-http.cookies :as cookies]
             [hiccup.util]
             [clojure.data.json :as json]
             [clojure.tools.logging :as log])
@@ -34,14 +35,13 @@
   (hiccup.util/with-base-url @rb-url
     (log/info "Updating RB session...")
     (let [url (hiccup.util/url "/api/review-requests/")
-          cs (clj-http.cookies/cookie-store)]
-        (client/get (hiccup.util/to-str url)
-                    {:content-type :json
-                     :cookie-store cs
-                     :basic-auth [@rb-user @rb-password]
-                     :as :json})
-        (let [sid (:value (get (clj-http.cookies/get-cookies cs) "rbsessionid"))]
-          (reset! rb-session-id sid)))))
+          cs (cookies/cookie-store)
+          res (client/get (hiccup.util/to-str url)
+                          {:content-type :json
+                           :basic-auth [@rb-user @rb-password]
+                           :as :json})
+          rbsessionid (get-in res [:cookies "rbsessionid" :value])]
+      (reset! rb-session-id rbsessionid))))
 
 
 (defn get-last-update-info
@@ -50,10 +50,11 @@
         res (rb-get url @rb-session-id)]
     (get-in res [:body :last_update])))
 
+
 (defn get-rb-user
   [username]
   (let [url (str "/api/users/" username "/")
-        res (rb-get url@rb-session-id)]
+        res (rb-get url @rb-session-id)]
     (get-in res [:body :user])))
 
 
