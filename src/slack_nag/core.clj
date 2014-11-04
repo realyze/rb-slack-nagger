@@ -7,27 +7,45 @@
             [clj-time.format :as tf]
             [clj-time.local :as tl]
             [clj-time.predicates :as tpr]
-            [clojurewerkz.urly.core :as urly]
+            [clojure.core.memoize :as memo]
+            [environ.core :refer [env]]
+            ;[clojure.core.async :as async :refer :all]
+            [ring.adapter.jetty :as jetty]
+
+            [clojurewerkz.quartzite.scheduler :as qs]
+            [clojurewerkz.quartzite.triggers :as tr]
+            [clojurewerkz.quartzite.jobs :as j]
+            [clojurewerkz.quartzite.jobs :refer [defjob]]
+            [clojurewerkz.quartzite.schedule.daily-interval :refer
+             [schedule
+              monday-through-friday
+              starting-daily-at
+              time-of-day
+              ending-daily-at
+              with-interval-in-seconds]]
+
             [clojure.tools.logging :as log])
   (:gen-class))
 
 
-;; Slack env vars
-(def ^:private slack-token (delay (System/getenv "SLACK_TOKEN")))
 
-
+;; Slack
+(def ^:private slack-token (env :slack-token))
 (def ^:const slack-api-base-url "https://slack.com/api")
 
-
-(defn get-slack-users
-  "Returns JSON list of slack users."
+(defn -get-slack-users
+  "returns json list of slack users."
   [slack-token]
   (hiccup.util/with-base-url slack-api-base-url
     (let [url-with-qs (hiccup.util/url "/users.list" {:token slack-token})
           res (client/get (hiccup.util/to-str url-with-qs)
                           {:content-type :json
                            :as :json})]
+      (log/info "get all slack users")
       (get-in res [:body :members]))))
+
+
+(def get-slack-users (memo/ttl -get-slack-users :ttl/threshold (* 1000 60 10)))
 
 
 (defn weekdays
@@ -63,8 +81,8 @@
 
 
 (defn- get-rb-target-person
-  "Helper function that retrieves RB user's username from the href provided
-  by RB API"
+  "Helper function that retrieves RB user from the href provided
+  by RB API (target person in a rr)."
   [person-json]
   (let [url (:href person-json)
         trimmed-url (clojure.string/replace url #"/$" "")
@@ -81,7 +99,7 @@
         last-update-type (:type last-update)
         submitter (get-in req [:links :submitter :href])
         last-updater (get-in last-update [:user :links :self :href])]
-    ;; This is like "if <foo> in vector".
+    ;; This is like "if <foo> in <vector>".
     (if (some #{last-update-type} ["diff", "review_request"])
       ;; Last update was a new diff or review request update =>
       ;; we should notify the reviewers.
@@ -109,43 +127,65 @@
 (defn slack-post-message
   "Posts a message to Slack channel."
   [token channel msg]
-  (client/post "https://slack.com/api/chat.postMessage"
-               {:form-params {:token token
-                              :channel channel
-                              :text msg}}))
+  (if (not (= (env :environment) "production"))
+    (log/debug "Posting SLACK for: " channel)
+    (client/post "https://slack.com/api/chat.postMessage"
+                 {:form-params {:token token
+                                :channel channel
+                                :text msg}})))
 
 (defn slack-notify
-  "Sends a Slack message to all users identified by emails."
-  [all-slack-users [emails review-request] serious?]
-  (loop [email (first emails)
-         emails-to-go (rest emails)]
-    (let [email-matches? (fn [obj] (= (get-in obj [:profile :email]) email))
-          target (first (filter email-matches? all-slack-users))
-          target-id (:id target)
-          msg (get-message review-request target serious?)]
-      (do
-        (slack-post-message @slack-token target-id msg)
-        (if (> (count emails-to-go) 0)
-          (recur (first emails-to-go) (rest emails-to-go)))))))
+  "Sends a Slack message to the users identified by email."
+  [email review-request serious?]
+  (let [slack-users (get-slack-users slack-token)
+        email-matches? (fn [obj] (= (get-in obj [:profile :email]) email))
+        target-user (first (filter email-matches? slack-users))]
+    (when target-user
+      (log/info "slack-notify for: " email "; serious?" serious? "; rid" (:id review-request))
+      (let [target-user-id (:id target-user)
+            msg (get-message review-request target-user serious?)]
+        (slack-post-message slack-token target-user-id msg)))))
+
+
+(defjob Nag
+  [ctx]
+  (let [reqs (rb/get-review-requests {:ship-it 0, :max-results 100})
+        old-enough-reqs (filter old-enough? reqs)
+        naggable-reqs (filter naggable? old-enough-reqs)
+        naggees-emails (pmap find-naggees naggable-reqs)]
+    ;; Nag away!
+    (doseq [[req, emails] (map list naggable-reqs, (remove nil? naggees-emails))]
+      (doall (map #(slack-notify % req (naggable-serious? req)) emails)))))
+
+
+(defn forever []
+  "Start a periodic job using `quartzite`."
+  (qs/initialize)
+  (qs/start)
+  (log/info "Starting background thread (scheduler)...")
+  (let [job (j/build
+              (j/of-type Nag)
+              (j/with-identity (j/key "jobs.nag.1")))
+        trigger (tr/build
+                  (tr/with-identity (tr/key "triggers.1"))
+                  (tr/start-now)
+                  (tr/with-schedule (schedule
+                                      (monday-through-friday)
+                                      (starting-daily-at (time-of-day 9 30 00)))))]
+    (qs/schedule job trigger)))
+
+
+(defn server
+  "Start a web server (we're only doing that because Heroku needs to bind to PORT)."
+  []
+  (jetty/run-jetty
+    (fn [req] {:status 200 :body "Who is John Galt?"})
+    {:port (env :port)}))
 
 (defn -main
   [& args]
   (do
     ;; Update the RB session token (used to auhtenticate).
     (rb/update-rb-session-id)
-    (let [slack-users (get-slack-users @slack-token)
-          reqs (rb/get-review-requests {:ship-it 0, :max-results 100})
-          old-enough-reqs (filter old-enough? reqs)
-          ;; Find naggable requests.
-          naggable (filter #(and (naggable? %) (not (naggable-serious? %))) old-enough-reqs)
-          naggable-serious (filter naggable-serious? old-enough-reqs)
-          ;; Find users to nag (their e-mails).
-          naggees (pmap find-naggees naggable)
-          naggees-serious (pmap find-naggees naggable-serious)
-          ;; Zip the users-to-be-nagged with the respective review requests so that
-          ;; we have all the info we need when sending the Slack message.
-          naggees-zipped (map vector naggees naggable)
-          naggees-serious-zipped (map vector naggees-serious naggable-serious)]
-      ;; Nag away!
-      (doall (map #(slack-notify slack-users % false) naggees-zipped))
-      (doall (map #(slack-notify slack-users % true) naggees-serious-zipped)))))
+    (.start (Thread. forever))
+    (server)))

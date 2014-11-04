@@ -3,14 +3,15 @@
             [clj-http.cookies :as cookies]
             [hiccup.util]
             [clojure.data.json :as json]
+            [environ.core :refer [env]]
             [clojure.tools.logging :as log])
   (:gen-class))
 
 
 ;; RB env vars
-(def ^:private rb-url (delay (System/getenv "RB_URL")))
-(def ^:private rb-user (delay (System/getenv "RB_USER")))
-(def ^:private rb-password (delay (System/getenv "RB_PASSWORD")))
+(def ^:private rb-url (env :rb-url))
+(def ^:private rb-user (env :rb-user))
+(def ^:private rb-password (env :rb-password))
 
 
 ;; RB session id needs to be updated every now and then (it expires).
@@ -20,8 +21,8 @@
 (defn- rb-get
   ([endpoint session-id] (rb-get endpoint session-id {}))
   ([endpoint session-id opts]
-   (log/info (str "rb-get: " endpoint ", " opts))
-   (let [url (hiccup.util/url @rb-url endpoint)
+   (log/debug "rb-get: " endpoint ", " opts)
+   (let [url (hiccup.util/url rb-url endpoint)
          default-opts {:start 0}
          opts (into default-opts opts)]
      (client/get (hiccup.util/to-str url)
@@ -32,13 +33,13 @@
 
 (defn update-rb-session-id
   []
-  (hiccup.util/with-base-url @rb-url
+  (hiccup.util/with-base-url rb-url
     (log/info "Updating RB session...")
     (let [url (hiccup.util/url "/api/review-requests/")
           cs (cookies/cookie-store)
           res (client/get (hiccup.util/to-str url)
                           {:content-type :json
-                           :basic-auth [@rb-user @rb-password]
+                           :basic-auth [rb-user rb-password]
                            :as :json})
           rbsessionid (get-in res [:cookies "rbsessionid" :value])]
       (reset! rb-session-id rbsessionid))))
