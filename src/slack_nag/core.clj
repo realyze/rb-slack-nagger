@@ -28,7 +28,7 @@
   (:gen-class))
 
 
-(def job-start-time (split (or (env :job-start-time) "") #":"))
+(def job-start-time (or (env :job-start-time) ""))
 
 
 ;; Slack
@@ -168,12 +168,13 @@
   (let [job (j/build
               (j/of-type Nag)
               (j/with-identity (j/key "jobs.nag.1")))
+        job-time (map #(Integer/parseInt %) (split job-start-time #":"))
         trigger (tr/build
                   (tr/with-identity (tr/key "triggers.1"))
                   (tr/start-now)
                   (tr/with-schedule (schedule
                                       (monday-through-friday)
-                                      (starting-daily-at (apply time-of-day job-start-time)))))]
+                                      (starting-daily-at (apply time-of-day job-time)))))]
     (qs/schedule job trigger)))
 
 
