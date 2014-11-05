@@ -28,7 +28,7 @@
   (:gen-class))
 
 
-(def job-start-time (split (env :job-start-time) #":"))
+(def job-start-time (split (or (env :job-start-time) "") #":"))
 
 
 ;; Slack
