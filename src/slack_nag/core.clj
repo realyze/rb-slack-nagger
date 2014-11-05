@@ -14,21 +14,15 @@
 
             [clojurewerkz.quartzite.scheduler :as qs]
             [clojurewerkz.quartzite.triggers :as tr]
+            [clojurewerkz.quartzite.schedule.cron :as s :refer [schedule cron-schedule]]
             [clojurewerkz.quartzite.jobs :as j]
             [clojurewerkz.quartzite.jobs :refer [defjob]]
-            [clojurewerkz.quartzite.schedule.daily-interval :refer
-             [schedule
-              monday-through-friday
-              starting-daily-at
-              time-of-day
-              ending-daily-at
-              with-interval-in-seconds]]
 
             [clojure.tools.logging :as log])
   (:gen-class))
 
 
-(def job-start-time (or (env :job-start-time) ""))
+(def cron-expr (or (env :cron-expr) ""))
 
 
 ;; Slack
@@ -156,6 +150,7 @@
         naggable-reqs (filter naggable? old-enough-reqs)
         naggees-emails (pmap find-naggees naggable-reqs)]
     ;; Nag away!
+    (log/info "#naggable review requests: " (count naggable-reqs))
     (doseq [[req, emails] (map list naggable-reqs, (remove nil? naggees-emails))]
       (doall (map #(slack-notify % req (naggable-serious? req)) emails)))))
 
@@ -168,13 +163,11 @@
   (let [job (j/build
               (j/of-type Nag)
               (j/with-identity (j/key "jobs.nag.1")))
-        job-time (map #(Integer/parseInt %) (split job-start-time #":"))
         trigger (tr/build
                   (tr/with-identity (tr/key "triggers.1"))
-                  (tr/start-now)
                   (tr/with-schedule (schedule
-                                      (monday-through-friday)
-                                      (starting-daily-at (apply time-of-day job-time)))))]
+                                      (cron-schedule cron-expr)
+                                      (s/with-misfire-handling-instruction-do-nothing))))]
     (qs/schedule job trigger)))
 
 
