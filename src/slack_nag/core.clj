@@ -155,7 +155,7 @@
       (doall (map #(slack-notify % req (naggable-serious? req)) emails)))))
 
 
-(defconstrainedfn forever
+(defconstrainedfn schedule-nagging
   [] [(string? (env :slack-token))
       (string? (env :tz))
       (string? (env :cron-expr))]
@@ -175,7 +175,7 @@
     (qs/schedule job trigger)))
 
 
-(defn server
+(defn start-server
   "Start a web server (we're only doing that because Heroku needs to bind to PORT)."
   []
   (jetty/run-jetty
@@ -187,5 +187,5 @@
   (do
     ;; Update the RB session token (used to auhtenticate).
     (rb/update-rb-session-id)
-    (forever)
-    (server)))
+    (schedule-nagging)
+    (start-server)))
