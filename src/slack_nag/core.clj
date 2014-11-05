@@ -183,7 +183,7 @@
   []
   (jetty/run-jetty
     (fn [req] {:status 200 :body "Who is John Galt?"})
-    {:port (env :port)}))
+    {:port (Integer/parseInt (env :port))}))
 
 (defn -main
   [& args]
