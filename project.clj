@@ -34,6 +34,7 @@
   :profiles {:uberjar {:aot :all}
              :default {:env {:rb-url "https://review.salsitasoft.com"
                              :environment "development"
+                             :job-start-time "9:30:00"
                              :port 3000}}
              :production {:env {:environment "production"}}
              :test {:env {:rb-user "test-user"

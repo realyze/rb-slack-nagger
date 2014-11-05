@@ -9,8 +9,8 @@
             [clj-time.predicates :as tpr]
             [clojure.core.memoize :as memo]
             [environ.core :refer [env]]
-            ;[clojure.core.async :as async :refer :all]
             [ring.adapter.jetty :as jetty]
+            [clojure.string :refer [split]]
 
             [clojurewerkz.quartzite.scheduler :as qs]
             [clojurewerkz.quartzite.triggers :as tr]
@@ -27,6 +27,8 @@
             [clojure.tools.logging :as log])
   (:gen-class))
 
+
+(def job-start-time (split (env :job-start-time) #":"))
 
 
 ;; Slack
@@ -171,7 +173,7 @@
                   (tr/start-now)
                   (tr/with-schedule (schedule
                                       (monday-through-friday)
-                                      (starting-daily-at (time-of-day 9 30 00)))))]
+                                      (starting-daily-at (apply time-of-day job-start-time)))))]
     (qs/schedule job trigger)))
 
 
