@@ -27,16 +27,18 @@
                  [compojure "1.1.8"]
                  [ring/ring-jetty-adapter "1.2.2"]
                  [org.clojure/core.async "0.1.346.0-17112a-alpha"]
+                 [trammel "0.8.0"]
                  [org.clojure/clojure "1.6.0"]]
   :main ^:skip-aot slack-nag.core
   :target-path "target/%s"
   :min-lein-version "2.4.0"
   :profiles {:uberjar {:aot :all}
-             :default {:env {:rb-url "https://review.salsitasoft.com"
-                             :environment "development"
-                             :job-start-time "9:30:00"
-                             :port 3000}}
-             :production {:env {:environment "production"}}
-             :test {:env {:rb-user "test-user"
-                          :rb-password "test-password"
-                          :environment "test"}}})
+             :shared {:env {:rb-url "https://review.salsitasoft.com"
+                            :tz "Europe/Prague"
+                            :port 3000
+                            :cron-expr "0 30 8 ? * MON-FRI"}}
+             :default [:shared {:env {:environment "development"}}]
+             :production [:shared {:env {:environment "production"}}]
+             :test [:shared {:env {:rb-user "test-user"
+                                   :rb-password "test-password"
+                                   :environment "test"}}]})

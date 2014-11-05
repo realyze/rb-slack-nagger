@@ -11,10 +11,14 @@
             [environ.core :refer [env]]
             [ring.adapter.jetty :as jetty]
             [clojure.string :refer [split]]
+            ; Design by contract FTW!
+            [trammel.core :refer [defconstrainedfn]]
 
             [clojurewerkz.quartzite.scheduler :as qs]
             [clojurewerkz.quartzite.triggers :as tr]
-            [clojurewerkz.quartzite.schedule.cron :as s :refer [schedule cron-schedule]]
+            [clojurewerkz.quartzite.schedule.cron :as s :refer
+             [schedule
+              cron-schedule]]
             [clojurewerkz.quartzite.jobs :as j]
             [clojurewerkz.quartzite.jobs :refer [defjob]]
 
@@ -22,11 +26,7 @@
   (:gen-class))
 
 
-(def cron-expr (or (env :cron-expr) ""))
-
-
 ;; Slack
-(def ^:private slack-token (env :slack-token))
 (def ^:const slack-api-base-url "https://slack.com/api")
 
 (defn -get-slack-users
@@ -133,14 +133,14 @@
 (defn slack-notify
   "Sends a Slack message to the users identified by email."
   [email review-request serious?]
-  (let [slack-users (get-slack-users slack-token)
+  (let [slack-users (get-slack-users (env :slack-token))
         email-matches? (fn [obj] (= (get-in obj [:profile :email]) email))
         target-user (first (filter email-matches? slack-users))]
     (when target-user
       (log/info "slack-notify for: " email "; serious?" serious? "; rid" (:id review-request))
       (let [target-user-id (:id target-user)
             msg (get-message review-request target-user serious?)]
-        (slack-post-message slack-token target-user-id msg)))))
+        (slack-post-message (env :slack-token) target-user-id msg)))))
 
 
 (defjob Nag
@@ -155,7 +155,10 @@
       (doall (map #(slack-notify % req (naggable-serious? req)) emails)))))
 
 
-(defn forever []
+(defconstrainedfn forever
+  [] [(string? (env :slack-token))
+      (string? (env :tz))
+      (string? (env :cron-expr))]
   "Start a periodic job using `quartzite`."
   (qs/initialize)
   (qs/start)
@@ -166,7 +169,8 @@
         trigger (tr/build
                   (tr/with-identity (tr/key "triggers.1"))
                   (tr/with-schedule (schedule
-                                      (cron-schedule cron-expr)
+                                      (cron-schedule (env :cron-expr))
+                                      (s/in-time-zone (java.util.TimeZone/getTimeZone (env :tz)))
                                       (s/with-misfire-handling-instruction-do-nothing))))]
     (qs/schedule job trigger)))
 
@@ -176,12 +180,12 @@
   []
   (jetty/run-jetty
     (fn [req] {:status 200 :body "Who is John Galt?"})
-    {:port (Integer/parseInt (env :port))}))
+    {:port (if (number? (env :port)) (env :port) (Integer/parseInt (env :port)))}))
 
 (defn -main
   [& args]
   (do
     ;; Update the RB session token (used to auhtenticate).
     (rb/update-rb-session-id)
-    (.start (Thread. forever))
+    (forever)
     (server)))
