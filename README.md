@@ -1,36 +1,29 @@
-# slack-nag
+# ReviewBoard Slack Nagger
 
-FIXME: description
+Do your code reviews in time or get nagged on Slack!
 
-## Installation
+RB Slack nagger looks for reviews in RB that have not been attended to recently and notifies responsible Slack users.
 
-Download from http://example.com/FIXME.
+Note: User emails in Slack and ReviewBoard must match in order for the nagger to be able to link them.
 
-## Usage
+# Usage
+Deploy on Heroku and set the following env vars.
 
-FIXME: explanation
+## Env vars
 
-    $ java -jar slack-nag-0.1.0-standalone.jar [args]
+ * `SLACK_TOKEN` -> Your slack integration token (so that we can post to Slack)
+ * `CRON_EXPR` -> CRON expression specifying how often the nagger should run.
+ * `TZ` -> Nagger timezone string (defaults to `Europe/Prague`). Used to calculate the idle review time.
+ * `RB_URL` -> Your ReviewBoard server URL.
+ * `RB_USER` -> RB (admin) user. Used to access RB reviews.
+ * `RB_PASSWORD` -> RB (admin) user password.
 
-## Options
+## TODO:
 
-FIXME: listing of options this app accepts.
+ * Allow idle time customization (via env var).
 
-## Examples
-
-...
-
-### Bugs
-
-...
-
-### Any Other Sections
-### That You Think
-### Might be Useful
 
 ## License
-
-Copyright © 2014 FIXME
 
 Distributed under the Eclipse Public License either version 1.0 or (at
 your option) any later version.
