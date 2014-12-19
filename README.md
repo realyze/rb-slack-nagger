@@ -14,7 +14,7 @@ Deploy on Heroku and set the following env vars.
 ## Env vars
 
  * `SLACK_TOKEN` -> Your slack integration token (so that we can post to Slack)
- * `CRON_EXPR` -> CRON expression specifying how often the nagger should run.
+ * `CRON_EXPR` -> CRON expression specifying when/how often the nagger should run. Defaults to 8:30 AM (in the specified timezone).
  * `TZ` -> Nagger timezone string (defaults to `Europe/Prague`). Used to calculate the idle review time.
  * `RB_URL` -> Your ReviewBoard server URL.
  * `RB_USER` -> RB (admin) user. Used to access RB reviews.
