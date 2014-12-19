@@ -20,6 +20,8 @@ Deploy on Heroku and set the following env vars.
  * `RB_USER` -> RB (admin) user. Used to access RB reviews.
  * `RB_PASSWORD` -> RB (admin) user password.
 
+Note that the proper way to do that would be to have a worker dyno. But in case you don't want to spend money on this, you'll have to set up a pinger so that your dyno doesn't go to sleep. You could set up the New Relic add-on to do that. Or you could use something like [pingu](https://github.com/realyze/pingu).
+
 ## TODO:
 
  * Allow idle time customization (via env var).
