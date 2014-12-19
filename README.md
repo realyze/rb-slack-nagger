@@ -2,6 +2,8 @@
 
 Do your code reviews in time or get nagged on Slack!
 
+![I want you to do your code reviews.](http://ct.fra.bz/ol/fz/sw/i58/2/12/19/frabz-I-want-you-To-do-your-code-reviews-94f674.jpg)
+
 RB Slack nagger looks for reviews in RB that have not been attended to recently and notifies responsible Slack users.
 
 Note: User emails in Slack and ReviewBoard must match in order for the nagger to be able to link them.
